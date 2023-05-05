@@ -1,0 +1,61 @@
+name: Deploy to Apache2
+
+on:
+  push:
+    branches:
+      - master
+  
+    
+env:     
+        aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+  
+    - name: Login to Amazon ECR
+      run: |
+       aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 210347159243.dkr.ecr.us-east-1.amazonaws.com
+        
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        
+      run: |
+        docker build -t deploy-html .
+        docker tag deploy-html:latest 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest
+        docker push 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest 
+
+        echo "Build and push completed successfully"
+        echo "Image URL: 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest"
+
+    - name: Connect to server, pull and deploy
+      uses: actions/checkout@v2
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Pull the latest Docker image from ECR
+            docker pull 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest
+          # Stop and remove the existing container
+            docker stop deploy-html-container || true
+            docker rm deploy-html-container || true
+          # Run the new container with the updated image
+            docker run -d --name deploy-html-container -p 80:80 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest
+  
