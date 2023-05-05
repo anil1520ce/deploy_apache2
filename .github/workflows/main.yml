@@ -50,6 +50,11 @@ jobs:
         host: ${{ secrets.SERVER_IP }}
         username: ${{ secrets.SERVER_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
+        
+        run: | 
+          echo "$SSH_PRIVATE_KEY" > private_key && chmod 600 private_key
+          ssh -o StrictHostKeyChecking=no -i private_key ${SERVER_USERNAME}@${SERVER_IP} '
+
         script: |
           # Pull the latest Docker image from ECR
             docker pull 210347159243.dkr.ecr.us-east-1.amazonaws.com/deploy-html:latest
